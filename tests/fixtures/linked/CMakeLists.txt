@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(linked C)
+add_executable(linked net.c)
+if(QNX)
+  target_link_libraries(linked socket)
+endif()

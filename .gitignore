@@ -15,3 +15,5 @@ BRIEF.md
 BUILD_LOG.md
 SUBMIT_CHECKLIST.md
 .DS_Store
+/tests/unit
+*.dSYM/
