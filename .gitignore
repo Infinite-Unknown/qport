@@ -9,8 +9,6 @@
 
 # local / private
 .env
-.claude/
-CLAUDE.md
 BRIEF.md
 BUILD_LOG.md
 SUBMIT_CHECKLIST.md
