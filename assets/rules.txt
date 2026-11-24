@@ -1,0 +1,51 @@
+QNX001  error    Linux kernel header; QNX has no Linux kernel headers
+QNX002  error    epoll is Linux-only
+QNX003  error    eventfd/signalfd/timerfd headers do not exist on QNX
+QNX004  error    Linux-specific system header
+QNX005  error    Depends on a Linux userspace component (systemd, libcap, udev, glibc)
+QNX006  warning  glibc backtrace() API
+QNX007  warning  QNX puts ELF definitions in <sys/elf.h>
+QNX008  warning  System V IPC
+QNX009  note     inotify exists on QNX but lives in libfsnotify and needs fsevmgr
+QNX010  note     POSIX message queues need the mqueue manager on QNX
+QNX020  error    epoll is Linux-only
+QNX021  error    eventfd() does not exist on QNX
+QNX022  error    timerfd does not exist on QNX
+QNX023  error    signalfd() does not exist on QNX
+QNX024  error    Linux CPU affinity API
+QNX025  error    prctl() is Linux-only
+QNX026  error    Raw Linux system call numbers do not exist on QNX
+QNX027  error    Linux namespaces/clone are not available on QNX
+QNX028  warning  memfd_create() is not in the QNX 8.0 C Library Reference
+QNX029  warning  glibc/Linux system information call
+QNX030  warning  getauxval() is not in the QNX 8.0 C Library Reference
+QNX031  warning  sched_getcpu() is not in the QNX 8.0 C Library Reference
+QNX032  warning  glibc backtrace() API
+QNX033  warning  vfork() is not in the QNX 8.0 C Library Reference
+QNX034  note     fork() works on QNX, but spawn is preferred
+QNX035  warning  System V IPC call
+QNX036  warning  Linux zero-copy file call
+QNX037  note     inotify needs libfsnotify and fsevmgr on QNX
+QNX038  note     POSIX message queues need the mqueue manager running
+QNX039  warning  glibc malloc introspection
+QNX050  warning  Linux-only socket option
+QNX052  warning  Linux-only open() flag
+QNX053  warning  Linux-only mmap()/madvise() flag
+QNX054  warning  Linux-only clock id
+QNX051  note     _GNU_SOURCE is a glibc feature macro
+QNX060  error    sysfs path; QNX has no /sys
+QNX061  warning  Linux /proc file
+QNX062  note     Path into /dev/shm
+QNX070  error    -fsplit-stack is not supported by qcc
+QNX071  note     Linux link library that QNX keeps in libc
+QNX072  note     Linux-only branch in CMake; a QNX build takes the other path
+QNX073  warning  Platform picked with uname, which reports the build host
+QNX080  warning  Uses sockets, but the build never links libsocket
+QNX081  warning  Uses POSIX regex, but the build never links libregex
+QNX082  warning  Uses inotify, but the build never links libfsnotify
+QNX083  warning  Large array on the stack
+QNX084  note     Variable-length array on the stack
+QNX085  note     Directory file descriptor opened without O_DIRECTORY
+QNX090  warning  Header not found in the QNX 8.0 target sysroot
+
+49 rules. Details: qport explain <ID>

@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 static void libs(const build_facts *f, strbuf *out)
 {
@@ -118,6 +119,13 @@ int emit_toolchain(const char *dir, const char *arch, const build_facts *f)
         sb_printf(&mk, "LDLIBS += %s\n", extra);
     sb_puts(&mk, "# LDFLAGS += -Wl,-z,stack-size,8388608\n");
 
+    if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+        fprintf(stderr, "qport: cannot create %s: %s\n", dir, strerror(errno));
+        sb_free(&cm);
+        sb_free(&mk);
+        sb_free(&lb);
+        return -1;
+    }
     char path[4096];
     int rc = 0;
     snprintf(path, sizeof path, "%s/qnx-%s.cmake", dir, arch);
