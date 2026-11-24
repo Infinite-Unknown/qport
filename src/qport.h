@@ -130,7 +130,15 @@ typedef struct {
 } build_facts;
 
 typedef struct {
+    char  *path;   /* relative to the scan root */
+    size_t lines;
+    int    build;  /* a build file rather than C/C++ source */
+} file_info;
+
+typedef struct {
     char        *root;
+    file_info   *files;
+    size_t       n_files, cap_files;
     size_t       files_scanned;
     size_t       source_files;
     size_t       build_files;
@@ -149,7 +157,9 @@ size_t count_sev(const scan_result *res, severity s, int include_guarded);
 
 /* ---------- reports (report.c) ---------- */
 
-typedef enum { FMT_TEXT, FMT_BRIEF, FMT_JSON, FMT_SARIF, FMT_MARKDOWN } out_format;
+typedef enum { FMT_TEXT, FMT_BRIEF, FMT_JSON, FMT_SARIF, FMT_MARKDOWN, FMT_HTML } out_format;
+
+extern const char qport_html_template[]; /* generated from report/template.html */
 
 void report_write(const scan_result *res, out_format fmt, int color,
                   int show_guarded, strbuf *out);

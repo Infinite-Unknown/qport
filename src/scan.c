@@ -1630,9 +1630,21 @@ static void scan_one(scan_result *res, const scan_options *opt, const char *full
     const char *base = strrchr(rel, '/');
     base = base ? base + 1 : rel;
     res->files_scanned++;
+    size_t nl = 0;
     for (size_t i = 0; i < len; i++)
         if (src[i] == '\n')
-            res->lines_scanned++;
+            nl++;
+    if (len && src[len - 1] != '\n')
+        nl++;
+    res->lines_scanned += nl;
+    if (res->n_files == res->cap_files) {
+        res->cap_files = res->cap_files ? res->cap_files * 2 : 32;
+        res->files = xrealloc(res->files, res->cap_files * sizeof *res->files);
+    }
+    res->files[res->n_files].path = xstrdup(rel);
+    res->files[res->n_files].lines = nl;
+    res->files[res->n_files].build = is_build(base);
+    res->n_files++;
 
     if (is_build(base)) {
         res->build_files++;
@@ -1818,6 +1830,9 @@ void scan_result_free(scan_result *res)
     for (size_t i = 0; i < res->n_headers; i++)
         free(res->headers[i]);
     free(res->headers);
+    for (size_t i = 0; i < res->n_files; i++)
+        free(res->files[i].path);
+    free(res->files);
     free(res->root);
     memset(res, 0, sizeof *res);
 }

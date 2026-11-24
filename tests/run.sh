@@ -93,6 +93,16 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=d["runs"][0]; ass
 $Q scan -f md "examples/linux-telemetryd" > "$OUT/example.md"
 has   "$OUT/example.md" "^\| error \| QNX020"                         "markdown table rows"
 
+$Q scan -f html -o "$OUT/example.html" "examples/linux-telemetryd"
+python3 - "$OUT/example.html" <<'PY' && ok "HTML report embeds the scan as JSON" || bad "HTML report embeds the scan as JSON"
+import json, re, sys
+html = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'<script id="qport-data" type="application/json">(.*?)</script>', html, re.S)
+d = json.loads(m.group(1))
+assert d["summary"]["error"] == 17 and len(d["file_list"]) == 7 and all("ref" in f for f in d["findings"])
+assert html.count("</script>") == 2
+PY
+
 echo "toolchain generator"
 mkdir -p "$OUT/tc"
 $Q toolchain --arch x86_64 --out "$OUT/tc" "examples/linux-telemetryd" > /dev/null

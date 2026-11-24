@@ -17,3 +17,7 @@ SUBMIT_CHECKLIST.md
 .DS_Store
 /tests/unit
 *.dSYM/
+.impeccable/
+PRODUCT.md
+DESIGN.md
+/tools/embed

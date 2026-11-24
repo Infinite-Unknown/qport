@@ -20,7 +20,7 @@ static void usage(FILE *fp)
         "  qport explain <RULE>               show one rule and its source\n"
         "\n"
         "scan options:\n"
-        "  -f, --format text|brief|json|sarif|md   output format (default text)\n"
+        "  -f, --format text|brief|json|sarif|md|html   output format (default text)\n"
         "      --brief                        one line per finding (same as -f brief)\n"
         "  -o, --output FILE                  write the report to FILE\n"
         "      --sysroot DIR                  QNX target dir for the header check\n"
@@ -124,6 +124,7 @@ int main(int argc, char **argv)
             else if (!strcmp(v, "json")) fmt = FMT_JSON;
             else if (!strcmp(v, "sarif")) fmt = FMT_SARIF;
             else if (!strcmp(v, "md") || !strcmp(v, "markdown")) fmt = FMT_MARKDOWN;
+            else if (!strcmp(v, "html")) fmt = FMT_HTML;
             else {
                 fprintf(stderr, "qport: unknown format '%s'\n", v);
                 return 2;

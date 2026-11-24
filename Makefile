@@ -11,7 +11,7 @@ CFLAGS  ?= -O2 -g
 CFLAGS  += -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter
 CPPFLAGS += -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE
 
-SRC  = src/main.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c
+SRC  = src/main.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c src/html_template.c
 LIB  = $(filter-out src/main.c,$(SRC))
 HDR  = src/qport.h
 
@@ -24,6 +24,12 @@ all: qport
 
 qport: $(SRC) $(HDR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRC)
+
+# The HTML report template is compiled in. src/html_template.c is committed
+# so a QNX build needs no host helper; it is regenerated when the template changes.
+src/html_template.c: report/template.html tools/embed.c
+	$(CC) -o tools/embed tools/embed.c
+	./tools/embed report/template.html $@
 
 tests/unit: tests/unit.c $(LIB) $(HDR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc -o $@ tests/unit.c $(LIB)
@@ -48,4 +54,4 @@ qnx-test: qport
 	./qport scan --sysroot "$$QNX_TARGET" examples/linux-telemetryd --fail-on never
 
 clean:
-	rm -rf qport tests/unit tests/out build-qnx-*
+	rm -rf qport tests/unit tests/out build-qnx-* tools/embed

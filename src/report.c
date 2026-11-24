@@ -194,7 +194,14 @@ static void write_json(const scan_result *res, int show_guarded, strbuf *out)
     if (res->facts.uses_sockets) { sb_puts(out, "\"socket\""); first = 0; }
     if (res->facts.uses_regex)   { sb_puts(out, first ? "\"regex\"" : ", \"regex\""); first = 0; }
     if (res->facts.uses_inotify) { sb_puts(out, first ? "\"fsnotify\"" : ", \"fsnotify\""); }
-    sb_puts(out, "],\n  \"findings\": [");
+    sb_puts(out, "],\n  \"file_list\": [");
+    for (size_t i = 0; i < res->n_files; i++) {
+        sb_puts(out, i ? ",\n    {\"path\": " : "\n    {\"path\": ");
+        sb_json_str(out, res->files[i].path);
+        sb_printf(out, ", \"lines\": %zu, \"build\": %s}", res->files[i].lines,
+                  res->files[i].build ? "true" : "false");
+    }
+    sb_puts(out, res->n_files ? "\n  ],\n  \"findings\": [" : "],\n  \"findings\": [");
     first = 1;
     for (size_t i = 0; i < res->findings.n; i++) {
         const finding *f = &res->findings.v[i];
@@ -216,6 +223,8 @@ static void write_json(const scan_result *res, int show_guarded, strbuf *out)
         sb_json_str(out, f->r->fix);
         sb_puts(out, ", \"snippet\": ");
         sb_json_str(out, f->snippet);
+        sb_puts(out, ", \"ref\": ");
+        sb_json_str(out, f->r->ref);
         sb_putc(out, '}');
     }
     sb_puts(out, first ? "]\n}\n" : "\n  ]\n}\n");
@@ -309,6 +318,34 @@ static void write_markdown(const scan_result *res, int show_guarded, strbuf *out
     }
 }
 
+/* The HTML report: the template with the JSON report embedded. JSON is
+ * made safe inside <script> by escaping every "</" as "<\/". */
+static void write_html(const scan_result *res, int show_guarded, strbuf *out)
+{
+    strbuf js;
+    sb_init(&js);
+    write_json(res, 1, &js); /* the page filters guarded findings itself */
+    const char *mark = "/*QPORT_DATA*/";
+    const char *at = strstr(qport_html_template, mark);
+    if (!at) {
+        sb_puts(out, qport_html_template);
+        sb_free(&js);
+        return;
+    }
+    sb_putn(out, qport_html_template, (size_t)(at - qport_html_template));
+    for (const char *p = js.data; *p; p++) {
+        if (p[0] == '<' && p[1] == '/') {
+            sb_puts(out, "<\\/");
+            p++;
+        } else {
+            sb_putc(out, *p);
+        }
+    }
+    sb_puts(out, at + strlen(mark));
+    sb_free(&js);
+    (void)show_guarded;
+}
+
 void report_write(const scan_result *res, out_format fmt, int color, int show_guarded, strbuf *out)
 {
     switch (fmt) {
@@ -316,6 +353,7 @@ void report_write(const scan_result *res, out_format fmt, int color, int show_gu
     case FMT_SARIF:    write_sarif(res, show_guarded, out); break;
     case FMT_MARKDOWN: write_markdown(res, show_guarded, out); break;
     case FMT_BRIEF:    write_brief(res, color, show_guarded, out); break;
+    case FMT_HTML:     write_html(res, show_guarded, out); break;
     default:           write_text(res, color, show_guarded, out); break;
     }
 }
