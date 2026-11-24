@@ -1,0 +1,17 @@
+# build output
+/build/
+/build-*/
+*.o
+/qport
+/qport-*
+/tests/out/
+/assets/video-work/
+
+# local / private
+.env
+.claude/
+CLAUDE.md
+BRIEF.md
+BUILD_LOG.md
+SUBMIT_CHECKLIST.md
+.DS_Store
