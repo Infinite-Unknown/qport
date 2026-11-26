@@ -947,7 +947,9 @@ static int header_in_dir(const char *dir, const char *hdr)
 {
     char path[4096];
     struct stat st;
-    snprintf(path, sizeof path, "%s/%s", dir, hdr);
+    int n = snprintf(path, sizeof path, "%s/%s", dir, hdr);
+    if (n < 0 || (size_t)n >= sizeof path)
+        return 0; /* too long to be a real header path */
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
@@ -968,12 +970,16 @@ static int header_in_project(const scan_result *res, const char *hdr)
 static int header_in_sysroot(const char *sysroot, const char *hdr)
 {
     char dir[4096];
-    snprintf(dir, sizeof dir, "%s/usr/include", sysroot);
+    int n = snprintf(dir, sizeof dir, "%s/usr/include", sysroot);
+    if (n < 0 || (size_t)n >= sizeof dir)
+        return 0;
     if (header_in_dir(dir, hdr))
         return 1;
     /* C++ standard library headers live under usr/include/c++/<ver>/ */
     char cxx[4096];
-    snprintf(cxx, sizeof cxx, "%s/usr/include/c++", sysroot);
+    n = snprintf(cxx, sizeof cxx, "%s/usr/include/c++", sysroot);
+    if (n < 0 || (size_t)n >= sizeof cxx)
+        return 0;
     DIR *d = opendir(cxx);
     if (!d)
         return 0;
@@ -982,7 +988,9 @@ static int header_in_sysroot(const char *sysroot, const char *hdr)
     while (!found && (de = readdir(d))) {
         if (de->d_name[0] == '.')
             continue;
-        snprintf(dir, sizeof dir, "%s/%s", cxx, de->d_name);
+        n = snprintf(dir, sizeof dir, "%s/%s", cxx, de->d_name);
+        if (n < 0 || (size_t)n >= sizeof dir)
+            continue; /* skip over-long entries */
         found = header_in_dir(dir, hdr);
     }
     closedir(d);
@@ -993,7 +1001,9 @@ static int sysroot_has_cxx(const char *sysroot)
 {
     char cxx[4096];
     struct stat st;
-    snprintf(cxx, sizeof cxx, "%s/usr/include/c++", sysroot);
+    int n = snprintf(cxx, sizeof cxx, "%s/usr/include/c++", sysroot);
+    if (n < 0 || (size_t)n >= sizeof cxx)
+        return 0;
     return stat(cxx, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
