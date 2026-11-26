@@ -1,0 +1,37 @@
+# 2026-11-26T06:41:50Z on Linux 6.8.0-1070-azure x86_64
+# QNX_HOST=/home/codespace/qnx800/host/linux/x86_64
+# QNX_TARGET=/home/codespace/qnx800/target/qnx
+# source commit: 0a7b86b plus working-tree changes to: src/html_template.c src/scan.c tools/embed.c 
+
+$ qcc -V
+cc: targets available in /home/codespace/qnx800/host/linux/x86_64/etc/qcc:
+	12.2.0,gcc_ntox86_64	(default)
+	12.2.0,gcc_ntoaarch64le
+	12.2.0,gcc_ntoaarch64le_gpp
+	12.2.0,gcc_ntoaarch64le_cxx
+	12.2.0,gcc_ntox86_64_gpp
+	12.2.0,gcc_ntox86_64_cxx
+exit=0
+
+$ rm -rf build-qnx-x86_64
+exit=0
+
+$ make qnx QNX_ARCH=x86_64
+cc -o tools/embed tools/embed.c
+./tools/embed report/template.html src/html_template.c
+mkdir -p build-qnx-x86_64
+qcc -Vgcc_ntox86_64 -D_QNX_SOURCE -O2 -g -Wall -o build-qnx-x86_64/qport src/main.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c src/html_template.c
+qcc -Vgcc_ntox86_64 -D_QNX_SOURCE -O2 -g -Wall -Isrc -o build-qnx-x86_64/unit tests/unit.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c src/html_template.c
+built build-qnx-x86_64/qport and build-qnx-x86_64/unit for QNX OS 8.0 x86_64
+exit=0
+
+$ file build-qnx-x86_64/qport build-qnx-x86_64/unit
+build-qnx-x86_64/qport: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=b0bf462976a9ea7cc8c12a33901ba1ce, with debug_info, not stripped
+build-qnx-x86_64/unit:  ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=2289e68d4185f79c403527fb2f3cba8f, with debug_info, not stripped
+exit=0
+
+$ ls -l build-qnx-x86_64/qport build-qnx-x86_64/unit
+-rwxrwxrwx 1 codespace codespace 286440 Nov 26 06:41 build-qnx-x86_64/qport
+-rwxrwxrwx 1 codespace codespace 277592 Nov 26 06:41 build-qnx-x86_64/unit
+exit=0
+

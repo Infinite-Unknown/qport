@@ -1,0 +1,35 @@
+# 2026-11-26T06:41:54Z on Linux 6.8.0-1070-azure x86_64
+# QNX_HOST=/home/codespace/qnx800/host/linux/x86_64
+# QNX_TARGET=/home/codespace/qnx800/target/qnx
+# source commit: 0a7b86b plus working-tree changes to: src/html_template.c src/scan.c tools/embed.c 
+
+$ qcc -V
+cc: targets available in /home/codespace/qnx800/host/linux/x86_64/etc/qcc:
+	12.2.0,gcc_ntox86_64	(default)
+	12.2.0,gcc_ntoaarch64le
+	12.2.0,gcc_ntoaarch64le_gpp
+	12.2.0,gcc_ntoaarch64le_cxx
+	12.2.0,gcc_ntox86_64_gpp
+	12.2.0,gcc_ntox86_64_cxx
+exit=0
+
+$ rm -rf build-qnx-aarch64le
+exit=0
+
+$ make qnx QNX_ARCH=aarch64le
+mkdir -p build-qnx-aarch64le
+qcc -Vgcc_ntoaarch64le -D_QNX_SOURCE -O2 -g -Wall -o build-qnx-aarch64le/qport src/main.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c src/html_template.c
+qcc -Vgcc_ntoaarch64le -D_QNX_SOURCE -O2 -g -Wall -Isrc -o build-qnx-aarch64le/unit tests/unit.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c src/html_template.c
+built build-qnx-aarch64le/qport and build-qnx-aarch64le/unit for QNX OS 8.0 aarch64le
+exit=0
+
+$ file build-qnx-aarch64le/qport build-qnx-aarch64le/unit
+build-qnx-aarch64le/qport: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=c434bfe50303e8d79d7d1929f2229b83, with debug_info, not stripped
+build-qnx-aarch64le/unit:  ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /usr/lib/ldqnx-64.so.2, BuildID[md5/uuid]=00b635043cd4a40ae428d0caf580cc65, with debug_info, not stripped
+exit=0
+
+$ ls -l build-qnx-aarch64le/qport build-qnx-aarch64le/unit
+-rwxrwxrwx 1 codespace codespace 291696 Nov 26 06:41 build-qnx-aarch64le/qport
+-rwxrwxrwx 1 codespace codespace 282328 Nov 26 06:41 build-qnx-aarch64le/unit
+exit=0
+

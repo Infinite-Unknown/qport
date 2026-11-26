@@ -1,0 +1,43 @@
+# 2026-11-26T06:43:36Z on Linux 6.8.0-1070-azure x86_64
+# Cross-check: every system header the example includes, looked up in the real QNX SDP 8.0 target sysroot,
+# next to the qport findings for those headers (with --show-guarded so code inside #ifdef __linux__ is listed too).
+
+$ for h in $(grep -ho "#include <[^>]*>" examples/linux-telemetryd/src/*.c | sed "s/#include <\(.*\)>/\1/" | sort -u); do if test -f "$QNX_TARGET/usr/include/$h"; then echo "present  $h"; else echo "MISSING  $h"; fi; done
+present  errno.h
+MISSING  execinfo.h
+present  fcntl.h
+MISSING  linux/watchdog.h
+present  netdb.h
+present  pthread.h
+present  regex.h
+present  sched.h
+present  signal.h
+present  stdio.h
+present  stdlib.h
+present  string.h
+MISSING  sys/epoll.h
+MISSING  sys/eventfd.h
+present  sys/inotify.h
+present  sys/ioctl.h
+present  sys/mman.h
+MISSING  sys/prctl.h
+MISSING  sys/shm.h
+present  sys/socket.h
+MISSING  sys/sysinfo.h
+MISSING  sys/timerfd.h
+present  time.h
+present  unistd.h
+exit=0
+
+$ ./qport scan --sysroot "$QNX_TARGET" --show-guarded --fail-on never examples/linux-telemetryd | grep -E "^  [0-9]+:[0-9]+ .*(\.h|\.h:)" 
+  5:1     note    QNX009  sys/inotify.h: inotify exists on QNX but lives in libfsnotify and needs
+  4:1     warning QNX006  execinfo.h: glibc backtrace() API
+  12:1    error   QNX002  sys/epoll.h: epoll is Linux-only
+  13:1    error   QNX003  sys/eventfd.h: eventfd/signalfd/timerfd headers do not exist on QNX
+  14:1    error   QNX004  sys/prctl.h: Linux-specific system header
+  15:1    error   QNX003  sys/timerfd.h: eventfd/signalfd/timerfd headers do not exist on QNX
+  18:1    note    QNX001  linux/watchdog.h: Linux kernel header; QNX has no Linux kernel headers [in
+  7:1     warning QNX008  sys/shm.h: System V IPC
+  8:1     error   QNX004  sys/sysinfo.h: Linux-specific system header
+exit=0
+

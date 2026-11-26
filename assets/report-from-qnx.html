@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qport port map</title>
+<style>
+:root {
+  --mask-deep: #0b2e20;
+  --mask: #10432f;
+  --mask-hi: #145036;
+  --mask-line: #2c6a4f;
+  --silk: #eef1e6;
+  --silk-2: #b4c6b8;
+  --silk-3: #86a493;
+  --rule: rgba(238, 241, 230, 0.16);
+  --gold: #d9b45e;
+  --gold-hi: #ecca7a;
+  --gold-ink: #0b2e20;
+  --err: #ff8a6b;
+  --warn: #f3b847;
+  --copper: #c98a4b;
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  --t1: 0.75rem;   /* labels, data, designators */
+  --t2: 0.9375rem; /* body */
+  --t3: 1.75rem;   /* verdict */
+  --r1: 3px; --r2: 6px;
+
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--mask-deep); }
+body {
+  margin: 0;
+  background: var(--mask-deep);
+  color: var(--silk);
+  font: 400 var(--t2)/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--gold); color: var(--gold-ink); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: var(--r1); }
+* { scrollbar-color: var(--mask-line) var(--mask-deep); }
+a { color: inherit; text-decoration-color: var(--silk-3); text-underline-offset: 3px; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.caps { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; font-size: var(--t1); }
+
+.sheet {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s6) var(--s8);
+}
+.drawing {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: var(--s5);
+  align-items: start;
+}
+
+/* ---------- the board ---------- */
+.board-wrap { position: relative; }
+@media (min-width: 1081px) { .board-wrap { position: sticky; top: var(--s5); } }
+.board { display: block; width: 100%; height: auto; }
+.board .edge { fill: var(--mask); stroke: var(--silk); stroke-width: 1.5; }
+.board .keepout { fill: none; stroke: var(--mask-line); stroke-width: 1; stroke-dasharray: 3 5; }
+.board .hole { fill: var(--mask-deep); stroke: var(--copper); stroke-width: 4; }
+.board .fid { fill: var(--gold); }
+.board .fid-ring { fill: none; stroke: var(--mask-line); stroke-width: 1; }
+.board .fp { fill: rgba(11, 46, 32, 0.35); stroke: var(--silk); stroke-width: 1.2; }
+.board .fp.build { stroke-dasharray: 5 3; }
+.board .pin1 { fill: var(--silk); }
+.board .refdes { fill: var(--silk); font: 700 13px var(--sans); letter-spacing: 0.06em; }
+.board .fname { fill: var(--silk-2); font: 400 11px var(--mono); }
+.board .legend { fill: var(--silk-3); font: 600 11px var(--sans); letter-spacing: 0.1em; }
+.board .trace { fill: none; stroke: var(--mask-line); stroke-width: 2; }
+.pad { cursor: pointer; transition: transform 180ms var(--ease-out), opacity 180ms var(--ease-out); transform-box: fill-box; transform-origin: center; }
+.p-err { fill: var(--err); }
+.p-warn { fill: var(--warn); }
+.p-note { fill: var(--mask); stroke: var(--silk); stroke-width: 1.6; }
+.p-guard { fill: none; stroke: var(--silk-3); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.pad .halo { fill: none; stroke: var(--gold); stroke-width: 2; opacity: 0; transition: opacity 180ms var(--ease-out); }
+.pad:hover .halo, .pad.lit .halo, .pad:focus-visible .halo { opacity: 1; }
+.pad:focus { outline: none; }
+.pad.dim { opacity: 0.18; }
+@media (hover: hover) and (pointer: fine) { .pad:hover { transform: scale(1.25); } }
+
+/* ---------- the title block column ---------- */
+.side { display: grid; gap: var(--s5); }
+.titleblock {
+  border: 1px solid var(--silk);
+  border-radius: var(--r1);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.titleblock > div { padding: var(--s3) var(--s4); border-top: 1px solid var(--rule); min-width: 0; }
+.titleblock > div:nth-child(odd) { border-right: 1px solid var(--rule); }
+.titleblock > .wide { grid-column: 1 / -1; border-right: 0; border-top: 0; }
+.titleblock .k { color: var(--silk-3); display: block; margin-bottom: var(--s1); }
+.titleblock .v { font-weight: 600; overflow-wrap: anywhere; }
+.titleblock .wide .v { font-size: var(--t3); line-height: 1.15; letter-spacing: -0.01em; }
+
+.verdict {
+  background: var(--gold);
+  color: var(--gold-ink);
+  border-radius: var(--r2);
+  padding: var(--s5);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 12px 28px -14px rgba(0, 0, 0, 0.6);
+}
+.verdict .caps { opacity: 0.8; }
+.verdict h2 { margin: var(--s2) 0 var(--s2); font-size: var(--t3); line-height: 1.1; letter-spacing: -0.01em; font-weight: 800; text-transform: uppercase; }
+.verdict p { margin: 0 0 var(--s4); }
+.verdict.clean { background: var(--silk); }
+.btn {
+  appearance: none; border: 0; cursor: pointer;
+  font: 600 var(--t2) var(--sans);
+  background: var(--gold-ink); color: var(--gold-hi);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r1);
+  transition: transform 140ms var(--ease-out), background-color 160ms ease;
+}
+.btn:hover { background: #12402c; }
+.btn:active { transform: scale(0.97); }
+
+.chart { width: 100%; border-collapse: collapse; font-size: var(--t1); }
+.chart caption { text-align: left; padding-bottom: var(--s2); color: var(--silk-3); }
+.chart th { text-align: left; color: var(--silk-3); font-weight: 600; padding: var(--s2) var(--s2); border-bottom: 1px solid var(--silk); text-transform: uppercase; letter-spacing: 0.08em; }
+.chart td { padding: var(--s2); border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.chart td.q, .chart th.q { text-align: right; }
+.chart tr { cursor: pointer; transition: background-color 160ms ease; }
+.chart tbody tr:hover { background: var(--mask-hi); }
+.chart svg { display: block; }
+.linkline { font-size: var(--t1); color: var(--silk-2); border-top: 1px solid var(--rule); padding-top: var(--s3); }
+.linkline .mono { color: var(--silk); }
+
+/* ---------- findings ---------- */
+.findings { margin-top: var(--s8); }
+.bar {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5);
+  padding: var(--s3) 0;
+  background: var(--mask-deep);
+  border-bottom: 1px solid var(--silk);
+}
+.bar h2 { margin: 0; font-size: var(--t2); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-right: auto; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: var(--r1); overflow: hidden; }
+.seg button {
+  appearance: none; border: 0; background: transparent; color: var(--silk-2);
+  font: 600 var(--t1) var(--sans); letter-spacing: 0.06em; text-transform: uppercase;
+  padding: var(--s2) var(--s3); cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--silk); color: var(--mask-deep); }
+.seg button:active { transform: scale(0.97); }
+.toggle { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--t1); color: var(--silk-2); cursor: pointer; }
+.toggle input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0; }
+
+.file { margin-top: var(--s6); }
+.file-h { display: flex; align-items: baseline; gap: var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule); }
+.file-h .rd { font-weight: 700; letter-spacing: 0.06em; min-width: 3ch; }
+.file-h .path { font-weight: 600; overflow-wrap: anywhere; }
+.file-h .meta { margin-left: auto; color: var(--silk-3); font-size: var(--t1); white-space: nowrap; }
+.row { border-bottom: 1px solid var(--rule); scroll-margin-top: 72px; transition: background-color 200ms ease; }
+.row.lit { background: var(--mask-hi); }
+.row > button {
+  all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+  display: grid; grid-template-columns: 20px 7ch 5.5rem minmax(0, 14rem) minmax(0, 1fr);
+  gap: var(--s3); align-items: baseline; padding: var(--s3) var(--s2);
+}
+.row > button:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.row .glyph { align-self: center; }
+.row .loc { color: var(--silk-2); font-size: var(--t1); }
+.row .sev { font-size: var(--t1); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.row .sev.error { color: var(--err); } .row .sev.warning { color: var(--warn); } .row .sev.note { color: var(--silk-2); }
+.row .what { font-family: var(--mono); font-size: var(--t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .title { min-width: 0; }
+.row .title small { color: var(--silk-3); font-size: var(--t1); margin-left: var(--s2); }
+.detail {
+  display: none;
+  padding: 0 var(--s2) var(--s4) calc(20px + 7ch + var(--s3) * 2 + var(--s2));
+}
+.row.open .detail { display: block; animation: rise 220ms var(--ease-out); }
+.detail pre {
+  margin: 0 0 var(--s3); padding: var(--s3) var(--s4);
+  background: rgba(0, 0, 0, 0.25); border-radius: var(--r1);
+  font: 400 var(--t1)/1.6 var(--mono); color: var(--silk); overflow-x: auto; white-space: pre;
+}
+.detail .fix { max-width: 72ch; margin: 0 0 var(--s2); }
+.detail .fix b { color: var(--gold-hi); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--t1); margin-right: var(--s2); }
+.detail .src { color: var(--silk-3); font-size: var(--t1); margin: 0; }
+.empty { padding: var(--s7) 0; color: var(--silk-2); max-width: 60ch; }
+.empty strong { color: var(--silk); display: block; font-size: var(--t3); line-height: 1.2; margin-bottom: var(--s2); }
+footer { margin-top: var(--s8); padding-top: var(--s4); border-top: 1px solid var(--rule); color: var(--silk-3); font-size: var(--t1); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); }
+
+/* ---------- the plot: pick-and-place on load ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes draw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+@keyframes place { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@keyframes drop { from { opacity: 0; transform: scale(1.8); } to { opacity: 1; transform: scale(1); } }
+.plot .edge { stroke-dasharray: var(--len); animation: draw 700ms var(--ease-out) both; }
+.plot .fpg { animation: place 360ms var(--ease-out) both; animation-delay: calc(260ms + var(--i) * 45ms); }
+.plot .pad > g { animation: drop 300ms var(--ease-out) both; animation-delay: calc(620ms + var(--i) * 14ms); transform-box: fill-box; transform-origin: center; }
+.plot-in .side > * { animation: rise 420ms var(--ease-out) both; animation-delay: calc(120ms + var(--i) * 70ms); }
+@media (prefers-reduced-motion: reduce) {
+  .plot .edge, .plot .fpg, .plot .pad > g, .plot-in .side > *, .row.open .detail { animation: none; }
+  .pad, .pad .halo { transition: none; }
+}
+
+@media (max-width: 1080px) {
+  .drawing { grid-template-columns: 1fr; }
+  .side { grid-template-columns: 1fr 1fr; }
+  .side .chart-wrap { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+  .sheet { padding: var(--s4) var(--s4) var(--s7); }
+  .side { grid-template-columns: 1fr; }
+  .row > button { grid-template-columns: 20px 6ch minmax(0, 1fr); }
+  .row .sev { display: none; }
+  .row .title { grid-column: 2 / -1; }
+  .detail { padding-left: var(--s2); }
+  .file-h { flex-wrap: wrap; }
+  .file-h .meta { margin-left: 0; width: 100%; }
+}
+</style>
+</head>
+<body>
+<main class="sheet" id="app" aria-live="polite"></main>
+<script id="qport-data" type="application/json">{
+  "tool": "qport",
+  "version": "0.1.0",
+  "target": "QNX OS 8.0",
+  "root": "examples/linux-telemetryd",
+  "files": {"source": 5, "build": 2, "lines": 297},
+  "summary": {"error": 17, "warning": 16, "note": 7, "guarded": 1},
+  "qnx_link_libs": ["socket", "regex", "fsnotify"],
+  "file_list": [
+    {"path": "CMakeLists.txt", "lines": 17, "build": true},
+    {"path": "Makefile", "lines": 8, "build": true},
+    {"path": "src/config.c", "lines": 37, "build": false},
+    {"path": "src/main.c", "lines": 118, "build": false},
+    {"path": "src/publish.c", "lines": 27, "build": false},
+    {"path": "src/sensors.c", "lines": 68, "build": false},
+    {"path": "src/telemetryd.h", "lines": 22, "build": false}
+  ],
+  "findings": [
+    {"rule": "QNX072", "severity": "note", "file": "CMakeLists.txt", "line": 12, "col": 4, "what": "CMAKE_SYSTEM_NAME Linux", "guarded": false, "title": "Linux-only branch in CMake; a QNX build takes the other path", "fix": "Add an if(QNX) / CMAKE_SYSTEM_NAME STREQUAL \"QNX\" branch (QNX toolchain files set QNX TRUE).", "snippet": "if(CMAKE_SYSTEM_NAME STREQUAL \"Linux\")", "ref": "QPG: Porting source code mechanics (build system adaptations)"},
+    {"rule": "QNX071", "severity": "note", "file": "CMakeLists.txt", "line": 17, "col": 53, "what": "-ldl", "guarded": false, "title": "Linux link library that QNX keeps in libc", "fix": "dlopen(), clock_gettime(), timer_create() and mq_open() are in libc on QNX 8.0; drop the extra library if the link fails.", "snippet": "target_link_libraries(telemetryd PRIVATE pthread rt -ldl)", "ref": "LIB: dlopen(), clock_gettime(), mq_open() (Library: libc)"},
+    {"rule": "QNX073", "severity": "warning", "file": "Makefile", "line": 2, "col": 20, "what": "uname", "guarded": false, "title": "Platform picked with uname, which reports the build host", "fix": "When cross compiling with qcc, uname describes the Linux or Windows host, not the QNX target. Decide on the target instead: CMake CMAKE_SYSTEM_NAME / if(QNX), or a TARGET_OS make variable.", "snippet": "UNAME_S := $(shell uname -s)", "ref": "QPG: Native compiler vs cross compiler"},
+    {"rule": "QNX081", "severity": "warning", "file": "src/config.c", "line": 2, "col": 1, "what": "-lregex", "guarded": false, "title": "Uses POSIX regex, but the build never links libregex", "fix": "On QNX, regcomp()/regexec() live in libregex: add -lregex.", "snippet": "#include <regex.h>", "ref": "LIB: regcomp() (Library: libregex)"},
+    {"rule": "QNX009", "severity": "note", "file": "src/config.c", "line": 5, "col": 1, "what": "sys/inotify.h", "guarded": false, "title": "inotify exists on QNX but lives in libfsnotify and needs fsevmgr", "fix": "Link with -lfsnotify and make sure the fsevmgr service runs on the target. QNX adds inotify_qnx_ext() for QNX-specific options.", "snippet": "#include <sys/inotify.h>", "ref": "LIB: inotify_init() (Library: libfsnotify)"},
+    {"rule": "QNX082", "severity": "warning", "file": "src/config.c", "line": 5, "col": 1, "what": "-lfsnotify", "guarded": false, "title": "Uses inotify, but the build never links libfsnotify", "fix": "Add -lfsnotify.", "snippet": "#include <sys/inotify.h>", "ref": "LIB: inotify_init() (Library: libfsnotify)"},
+    {"rule": "QNX037", "severity": "note", "file": "src/config.c", "line": 14, "col": 14, "what": "inotify_init1", "guarded": false, "title": "inotify needs libfsnotify and fsevmgr on QNX", "fix": "Link with -lfsnotify and run fsevmgr on the target.", "snippet": "int fd = inotify_init1(IN_NONBLOCK);", "ref": "LIB: inotify_init() (Library: libfsnotify)"},
+    {"rule": "QNX037", "severity": "note", "file": "src/config.c", "line": 15, "col": 5, "what": "inotify_add_watch", "guarded": false, "title": "inotify needs libfsnotify and fsevmgr on QNX", "fix": "Link with -lfsnotify and run fsevmgr on the target.", "snippet": "inotify_add_watch(fd, path, IN_CLOSE_WRITE);", "ref": "LIB: inotify_init() (Library: libfsnotify)"},
+    {"rule": "QNX051", "severity": "note", "file": "src/main.c", "line": 2, "col": 1, "what": "_GNU_SOURCE", "guarded": false, "title": "_GNU_SOURCE is a glibc feature macro", "fix": "On QNX, define _QNX_SOURCE (or _POSIX_C_SOURCE / _XOPEN_SOURCE) to expose the full API set.", "snippet": "#define _GNU_SOURCE", "ref": "QPG: Deep component analysis (macro conflicts)"},
+    {"rule": "QNX006", "severity": "warning", "file": "src/main.c", "line": 4, "col": 1, "what": "execinfo.h", "guarded": false, "title": "glibc backtrace() API", "fix": "backtrace() is not in the QNX 8.0 C Library Reference. Wrap the crash handler in #ifdef __GLIBC__ or use QNX's own backtrace library.", "snippet": "#include <execinfo.h>", "ref": "LIB: backtrace() not in the 8.0 C Library Reference"},
+    {"rule": "QNX002", "severity": "error", "file": "src/main.c", "line": 12, "col": 1, "what": "sys/epoll.h", "guarded": false, "title": "epoll is Linux-only", "fix": "Use poll() or select(); for event-driven servers on QNX, use ionotify() to get a pulse on a channel and MsgReceivePulse() / MsgReceive().", "snippet": "#include <sys/epoll.h>", "ref": "QPG: Deep component analysis (\"epoll(), QNX uses poll(), select(), or devctl()\")"},
+    {"rule": "QNX003", "severity": "error", "file": "src/main.c", "line": 13, "col": 1, "what": "sys/eventfd.h", "guarded": false, "title": "eventfd/signalfd/timerfd headers do not exist on QNX", "fix": "QNX has no direct equivalent: write a small shim (the QNX Porting Guide shows an eventfd shim), or use native mechanisms: timer_create() with SIGEV_PULSE for timers, pulses on a channel for wakeups, sigwaitinfo() for signals.", "snippet": "#include <sys/eventfd.h>", "ref": "QPG: Creating shim files for porting Linux system calls to QNX"},
+    {"rule": "QNX004", "severity": "error", "file": "src/main.c", "line": 14, "col": 1, "what": "sys/prctl.h", "guarded": false, "title": "Linux-specific system header", "fix": "Remove it. prctl(PR_SET_NAME) maps to pthread_setname_np(); process abilities on QNX are managed with procmgr_ability(); the CPU count is _syspage_ptr->num_cpu (<sys/syspage.h>).", "snippet": "#include <sys/prctl.h>", "ref": "LIB: prctl(), sysinfo() not in the 8.0 C Library Reference"},
+    {"rule": "QNX003", "severity": "error", "file": "src/main.c", "line": 15, "col": 1, "what": "sys/timerfd.h", "guarded": false, "title": "eventfd/signalfd/timerfd headers do not exist on QNX", "fix": "QNX has no direct equivalent: write a small shim (the QNX Porting Guide shows an eventfd shim), or use native mechanisms: timer_create() with SIGEV_PULSE for timers, pulses on a channel for wakeups, sigwaitinfo() for signals.", "snippet": "#include <sys/timerfd.h>", "ref": "QPG: Creating shim files for porting Linux system calls to QNX"},
+    {"rule": "QNX001", "severity": "note", "file": "src/main.c", "line": 18, "col": 1, "what": "linux/watchdog.h", "guarded": true, "title": "Linux kernel header; QNX has no Linux kernel headers", "fix": "Remove the include or wrap it in #ifdef __linux__. On QNX, device access goes through resource managers (open/read/write/devctl) instead of Linux ioctl structures.", "snippet": "#include <linux/watchdog.h>", "ref": "QPG: Key differences between Linux and QNX; System architecture considerations"},
+    {"rule": "QNX032", "severity": "warning", "file": "src/main.c", "line": 29, "col": 13, "what": "backtrace", "guarded": false, "title": "glibc backtrace() API", "fix": "Guard with #ifdef __GLIBC__; QNX ships its own backtrace library.", "snippet": "int n = backtrace(frames, 32);", "ref": "LIB: backtrace() not in the 8.0 reference"},
+    {"rule": "QNX032", "severity": "warning", "file": "src/main.c", "line": 30, "col": 5, "what": "backtrace_symbols_fd", "guarded": false, "title": "glibc backtrace() API", "fix": "Guard with #ifdef __GLIBC__; QNX ships its own backtrace library.", "snippet": "backtrace_symbols_fd(frames, n, 2);", "ref": "LIB: backtrace() not in the 8.0 reference"},
+    {"rule": "QNX021", "severity": "error", "file": "src/main.c", "line": 37, "col": 5, "what": "eventfd_write", "guarded": false, "title": "eventfd() does not exist on QNX", "fix": "Write a shim (the QNX Porting Guide links an eventfd shim), use a pipe() as a wakeup channel, or send a pulse with MsgSendPulse().", "snippet": "eventfd_write(stop_fd, 1);", "ref": "QPG: Creating shim files for porting Linux system calls to QNX"},
+    {"rule": "QNX024", "severity": "error", "file": "src/main.c", "line": 45, "col": 9, "what": "sched_setaffinity", "guarded": false, "title": "Linux CPU affinity API", "fix": "Use ThreadCtl(_NTO_TCTL_RUNMASK_GET_AND_SET_INHERIT, ...) to set the thread's runmask (and its children's).", "snippet": "if (sched_setaffinity(0, sizeof set, &set) != 0)", "ref": "LIB: ThreadCtl() (_NTO_TCTL_RUNMASK*); sched_setaffinity() not in the 8.0 reference"},
+    {"rule": "QNX022", "severity": "error", "file": "src/main.c", "line": 51, "col": 14, "what": "timerfd_create", "guarded": false, "title": "timerfd does not exist on QNX", "fix": "Use timer_create() with a SIGEV_PULSE sigevent and receive the pulse with MsgReceivePulse(): deterministic periodic timers are what QNX is built for. Use CLOCK_MONOTONIC.", "snippet": "int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);", "ref": "QPG: Creating shim files; LIB: timer_create() (SIGEV_PULSE)"},
+    {"rule": "QNX022", "severity": "error", "file": "src/main.c", "line": 56, "col": 5, "what": "timerfd_settime", "guarded": false, "title": "timerfd does not exist on QNX", "fix": "Use timer_create() with a SIGEV_PULSE sigevent and receive the pulse with MsgReceivePulse(): deterministic periodic timers are what QNX is built for. Use CLOCK_MONOTONIC.", "snippet": "timerfd_settime(fd, 0, &its, NULL);", "ref": "QPG: Creating shim files; LIB: timer_create() (SIGEV_PULSE)"},
+    {"rule": "QNX025", "severity": "error", "file": "src/main.c", "line": 67, "col": 5, "what": "prctl", "guarded": false, "title": "prctl() is Linux-only", "fix": "PR_SET_NAME -> pthread_setname_np(0, name); capability/privilege options -> procmgr_ability().", "snippet": "prctl(PR_SET_NAME, \"telemetryd\", 0, 0, 0);", "ref": "LIB: pthread_setname_np(); prctl() not in the 8.0 reference"},
+    {"rule": "QNX021", "severity": "error", "file": "src/main.c", "line": 70, "col": 15, "what": "eventfd", "guarded": false, "title": "eventfd() does not exist on QNX", "fix": "Write a shim (the QNX Porting Guide links an eventfd shim), use a pipe() as a wakeup channel, or send a pulse with MsgSendPulse().", "snippet": "stop_fd = eventfd(0, EFD_NONBLOCK);", "ref": "QPG: Creating shim files for porting Linux system calls to QNX"},
+    {"rule": "QNX020", "severity": "error", "file": "src/main.c", "line": 82, "col": 14, "what": "epoll_create1", "guarded": false, "title": "epoll is Linux-only", "fix": "Use poll()/select(), or ionotify() with a pulse delivered to a channel and a MsgReceive() loop, which is the native QNX event model.", "snippet": "int ep = epoll_create1(0);", "ref": "QPG: Deep component analysis"},
+    {"rule": "QNX020", "severity": "error", "file": "src/main.c", "line": 84, "col": 25, "what": "epoll_ctl", "guarded": false, "title": "epoll is Linux-only", "fix": "Use poll()/select(), or ionotify() with a pulse delivered to a channel and a MsgReceive() loop, which is the native QNX event model.", "snippet": "ev.data.fd = tick;  epoll_ctl(ep, EPOLL_CTL_ADD, tick, &ev);", "ref": "QPG: Deep component analysis"},
+    {"rule": "QNX020", "severity": "error", "file": "src/main.c", "line": 85, "col": 27, "what": "epoll_ctl", "guarded": false, "title": "epoll is Linux-only", "fix": "Use poll()/select(), or ionotify() with a pulse delivered to a channel and a MsgReceive() loop, which is the native QNX event model.", "snippet": "ev.data.fd = stop_fd; epoll_ctl(ep, EPOLL_CTL_ADD, stop_fd, &ev);", "ref": "QPG: Deep component analysis"},
+    {"rule": "QNX020", "severity": "error", "file": "src/main.c", "line": 86, "col": 25, "what": "epoll_ctl", "guarded": false, "title": "epoll is Linux-only", "fix": "Use poll()/select(), or ionotify() with a pulse delivered to a channel and a MsgReceive() loop, which is the native QNX event model.", "snippet": "ev.data.fd = watch; epoll_ctl(ep, EPOLL_CTL_ADD, watch, &ev);", "ref": "QPG: Deep component analysis"},
+    {"rule": "QNX083", "severity": "warning", "file": "src/main.c", "line": 89, "col": 19, "what": "batch (400 KiB)", "guarded": false, "title": "Large array on the stack", "fix": "qcc produces binaries with a much smaller default stack than Linux's 8 MB. Move the buffer to the heap or a static, or link with -Wl,-z,stack-size,<bytes> (and set pthread_attr_setstacksize() for threads).", "snippet": "struct sample batch[100 * MAX_SIGNALS * 4];", "ref": "QPG: Some common troubles when cross compiling (process stack size)"},
+    {"rule": "QNX020", "severity": "error", "file": "src/main.c", "line": 94, "col": 17, "what": "epoll_wait", "guarded": false, "title": "epoll is Linux-only", "fix": "Use poll()/select(), or ionotify() with a pulse delivered to a channel and a MsgReceive() loop, which is the native QNX event model.", "snippet": "int n = epoll_wait(ep, events, 8, -1);", "ref": "QPG: Deep component analysis"},
+    {"rule": "QNX080", "severity": "warning", "file": "src/publish.c", "line": 2, "col": 1, "what": "-lsocket", "guarded": false, "title": "Uses sockets, but the build never links libsocket", "fix": "On QNX, socket functions need -lsocket (CMake: target_link_libraries(<t> socket) inside if(QNX)).", "snippet": "#include <netdb.h>", "ref": "QPG: Make (\"If the code uses regular expressions or sockets ... LDLIBS\"); QPG: CMake example (-lsocket)"},
+    {"rule": "QNX050", "severity": "warning", "file": "src/publish.c", "line": 18, "col": 31, "what": "SO_BINDTODEVICE", "guarded": false, "title": "Linux-only socket option", "fix": "io-sock's socket API is ported from FreeBSD, so use the FreeBSD equivalent where one exists (TCP_NOPUSH for TCP_CORK, bind to the interface address instead of SO_BINDTODEVICE, one send() instead of MSG_MORE) or drop the option.", "snippet": "setsockopt(s, SOL_SOCKET, SO_BINDTODEVICE, \"can0-gw\", 8);", "ref": "SOCK: Socket API (functions ported from FreeBSD)"},
+    {"rule": "QNX050", "severity": "warning", "file": "src/publish.c", "line": 26, "col": 54, "what": "MSG_MORE", "guarded": false, "title": "Linux-only socket option", "fix": "io-sock's socket API is ported from FreeBSD, so use the FreeBSD equivalent where one exists (TCP_NOPUSH for TCP_CORK, bind to the interface address instead of SO_BINDTODEVICE, one send() instead of MSG_MORE) or drop the option.", "snippet": "return (int)send(sock, s, (size_t)n * sizeof *s, MSG_MORE);", "ref": "SOCK: Socket API (functions ported from FreeBSD)"},
+    {"rule": "QNX008", "severity": "warning", "file": "src/sensors.c", "line": 7, "col": 1, "what": "sys/shm.h", "guarded": false, "title": "System V IPC", "fix": "shmget()/msgget()/semget() are not in the QNX 8.0 C Library Reference. Use POSIX shm_open()+mmap(), mq_open(), sem_open(), or QNX native message passing (MsgSend/MsgReceive/MsgReply).", "snippet": "#include <sys/shm.h>", "ref": "LIB: shm_open(), mq_open(); QPG: Interprocess communication and resource manager"},
+    {"rule": "QNX004", "severity": "error", "file": "src/sensors.c", "line": 8, "col": 1, "what": "sys/sysinfo.h", "guarded": false, "title": "Linux-specific system header", "fix": "Remove it. prctl(PR_SET_NAME) maps to pthread_setname_np(); process abilities on QNX are managed with procmgr_ability(); the CPU count is _syspage_ptr->num_cpu (<sys/syspage.h>).", "snippet": "#include <sys/sysinfo.h>", "ref": "LIB: prctl(), sysinfo() not in the 8.0 C Library Reference"},
+    {"rule": "QNX054", "severity": "warning", "file": "src/sensors.c", "line": 20, "col": 19, "what": "CLOCK_BOOTTIME", "guarded": false, "title": "Linux-only clock id", "fix": "QNX 8.0 clock_gettime() documents CLOCK_REALTIME, CLOCK_MONOTONIC and the CPU-time clocks. Use CLOCK_MONOTONIC for intervals.", "snippet": "clock_gettime(CLOCK_BOOTTIME, &ts);", "ref": "LIB: clock_gettime()"},
+    {"rule": "QNX060", "severity": "error", "file": "src/sensors.c", "line": 27, "col": 33, "what": "/sys/class/thermal/thermal_zone%d/temp", "guarded": false, "title": "sysfs path; QNX has no /sys", "fix": "Read hardware state from the driver's resource manager (devctl() or read() on its /dev path) or from the system page.", "snippet": "snprintf(path, sizeof path, \"/sys/class/thermal/thermal_zone%d/temp\", zone);", "ref": "QPG: Key differences between Linux and QNX (resource management)"},
+    {"rule": "QNX035", "severity": "warning", "file": "src/sensors.c", "line": 38, "col": 15, "what": "shmget", "guarded": false, "title": "System V IPC call", "fix": "Not in the QNX 8.0 C Library Reference. Use shm_open()+mmap(), mq_open(), sem_open(), or QNX message passing.", "snippet": "ring_id = shmget(0x7e1e, MAX_SIGNALS * sizeof(float), 0444);", "ref": "LIB: shm_open(), mq_open()"},
+    {"rule": "QNX035", "severity": "warning", "file": "src/sensors.c", "line": 40, "col": 16, "what": "shmat", "guarded": false, "title": "System V IPC call", "fix": "Not in the QNX 8.0 C Library Reference. Use shm_open()+mmap(), mq_open(), sem_open(), or QNX message passing.", "snippet": "ring = shmat(ring_id, NULL, SHM_RDONLY);", "ref": "LIB: shm_open(), mq_open()"},
+    {"rule": "QNX029", "severity": "warning", "file": "src/sensors.c", "line": 41, "col": 16, "what": "get_nprocs", "guarded": false, "title": "glibc/Linux system information call", "fix": "Use sysconf() for POSIX limits and the QNX system page (_syspage_ptr->num_cpu, <sys/syspage.h>) for the CPU count.", "snippet": "int ncpu = get_nprocs();", "ref": "LIB: sysinfo(), get_nprocs() not in the 8.0 reference"},
+    {"rule": "QNX061", "severity": "warning", "file": "src/sensors.c", "line": 59, "col": 21, "what": "/proc/meminfo", "guarded": false, "title": "Linux /proc file", "fix": "QNX's /proc is a process filesystem with a different layout and no Linux text files. Use sysconf() for limits and the system page (_syspage_ptr) for CPU and memory layout.", "snippet": "FILE *f = fopen(\"/proc/meminfo\", \"r\");", "ref": "QPG: Key differences between Linux and QNX"}
+  ]
+}
+</script>
+<script>
+(function () {
+  "use strict";
+  var data;
+  try { data = JSON.parse(document.getElementById("qport-data").textContent); }
+  catch (e) {
+    document.getElementById("app").innerHTML =
+      '<div class="empty"><strong>This report has no scan data.</strong>Open the file qport wrote with <span class="mono">qport scan -f html -o report.html &lt;path&gt;</span>.</div>';
+    return;
+  }
+
+  var NS = "http://www.w3.org/2000/svg";
+  var SEV = { error: 2, warning: 1, note: 0 };
+  var state = { sev: "all", guarded: false, lit: -1 };
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    for (var k in attrs || {}) {
+      if (k === "text") n.textContent = attrs[k];
+      else if (k === "html") n.innerHTML = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    }
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function svg(tag, attrs, kids) {
+    var n = document.createElementNS(NS, tag);
+    for (var k in attrs || {}) {
+      if (k === "text") n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]);
+    }
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
+
+  /* pad glyph: shape carries severity as well as colour */
+  function glyph(sev, guarded, size) {
+    var g = svg("g");
+    var h = size / 2;
+    if (guarded) g.appendChild(svg("circle", { r: h - 1, class: "p-guard" }));
+    else if (sev === "error") g.appendChild(svg("rect", { x: -h, y: -h, width: size, height: size, rx: 1, class: "p-err" }));
+    else if (sev === "warning") g.appendChild(svg("circle", { r: h, class: "p-warn" }));
+    else g.appendChild(svg("circle", { r: h - 1, class: "p-note" }));
+    return g;
+  }
+  function glyphIcon(sev, guarded) {
+    var s = svg("svg", { width: 14, height: 14, viewBox: "-7 -7 14 14", "aria-hidden": "true" });
+    s.appendChild(glyph(sev, guarded, 10));
+    return s;
+  }
+
+  var files = (data.file_list || []).slice().sort(function (a, b) { return (a.build - b.build) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0); });
+  var findings = data.findings || [];
+  findings.forEach(function (f, i) { f.idx = i; });
+  var src = files.filter(function (f) { return !f.build; });
+  var bld = files.filter(function (f) { return f.build; });
+  var refdes = {};
+  src.forEach(function (f, i) { refdes[f.path] = "F" + (i + 1); });
+  bld.forEach(function (f, i) { refdes[f.path] = "J" + (i + 1); });
+
+  function visible(f) {
+    if (f.guarded && !state.guarded) return false;
+    if (state.sev === "all") return true;
+    return f.severity === state.sev;
+  }
+  var counts = data.summary || { error: 0, warning: 0, note: 0, guarded: 0 };
+
+  /* ---------- board layout ---------- */
+  /* Pads sit in lanes inside each footprint; a footprint is as tall as its
+     lanes need. Footprints are shelf-packed by line count, then each row is
+     justified to the board width so the board reads as one assembly. */
+  var PAD = 11, LANE = PAD + 5;
+  function padsFor(path) {
+    return findings.filter(function (f) { return f.file === path; })
+      .sort(function (a, b) { return SEV[b.severity] - SEV[a.severity] || a.line - b.line; });
+  }
+  function laneCount(mine, w, lines) {
+    var lanes = [];
+    mine.forEach(function (f) {
+      var px = 14 + (w - 28) * Math.min(1, (f.line - 1) / Math.max(1, lines - 1));
+      var lane = 0;
+      while (lanes[lane] !== undefined && px - lanes[lane] < PAD + 3) lane++;
+      lanes[lane] = px;
+      f._px = px; f._lane = lane;
+    });
+    return Math.max(1, lanes.length);
+  }
+  function layoutBoard(W) {
+    var pad = 60, gap = 28, labelH = 24, rowGap = 26;
+    var inner = W - pad * 2;
+    function pack(list, minW, maxW, isConn) {
+      var maxLines = Math.max.apply(null, list.map(function (f) { return f.lines; }).concat([1]));
+      var rows = [], cur = [], used = 0;
+      list.forEach(function (f) {
+        var w = Math.round(minW + (maxW - minW) * Math.sqrt(f.lines / maxLines));
+        if (cur.length && used + gap + w > inner) { rows.push(cur); cur = []; used = 0; }
+        used += (cur.length ? gap : 0) + w;
+        cur.push({ f: f, w: w, conn: isConn });
+      });
+      if (cur.length) rows.push(cur);
+      rows.forEach(function (row) {
+        var sum = row.reduce(function (a, p) { return a + p.w; }, 0) + gap * (row.length - 1);
+        var k = Math.min(1.7, inner / sum);
+        row.forEach(function (p) { p.w = Math.round(p.w * k); });
+      });
+      return rows;
+    }
+    var rows = pack(src, 150, inner * 0.55, false).concat(pack(bld, 110, 220, true));
+    var y = pad + 10, placed = [], idx = 0;
+    rows.forEach(function (row) {
+      var x = pad, rowH = 0;
+      row.forEach(function (p) {
+        var mine = padsFor(p.f.path);
+        var lanes = laneCount(mine, p.w, p.f.lines);
+        p.lanes = lanes;
+        p.h = p.conn ? Math.max(34, 12 + lanes * LANE) : Math.max(54, 28 + lanes * LANE);
+        p.x = x; p.y = y + labelH; p.i = idx++; p.mine = mine;
+        x += p.w + gap;
+        rowH = Math.max(rowH, p.h);
+        placed.push(p);
+      });
+      y += labelH + rowH + rowGap;
+    });
+    if (!placed.length) y += 80;
+    return { W: W, H: y + pad - 10, placed: placed, pad: pad };
+  }
+
+  function drawBoard() {
+    var L = layoutBoard(1000);
+    var s = svg("svg", { class: "board", viewBox: "0 0 " + L.W + " " + L.H, role: "img",
+      "aria-label": "Port map: " + plural(src.length, "source file") + " as footprints, findings as pads at their line" });
+    var edgeLen = 2 * (L.W + L.H - 8);
+    s.appendChild(svg("rect", { class: "edge", x: 4, y: 4, width: L.W - 8, height: L.H - 8, rx: 18, style: "--len:" + edgeLen }));
+    s.appendChild(svg("rect", { class: "keepout", x: 26, y: 26, width: L.W - 52, height: L.H - 52, rx: 10 }));
+    [[30, 30], [L.W - 30, 30], [30, L.H - 30], [L.W - 30, L.H - 30]].forEach(function (p) {
+      s.appendChild(svg("circle", { class: "hole", cx: p[0], cy: p[1], r: 9 }));
+    });
+    [[L.W - 66, 30], [66, L.H - 30]].forEach(function (p) {
+      s.appendChild(svg("circle", { class: "fid-ring", cx: p[0], cy: p[1], r: 8 }));
+      s.appendChild(svg("circle", { class: "fid", cx: p[0], cy: p[1], r: 3.5 }));
+    });
+    s.appendChild(svg("text", { class: "legend", x: L.W - 96, y: L.H - 26, "text-anchor": "end",
+      text: (data.root || "").replace(/\/+$/, "").split("/").pop().toUpperCase() + "  ·  QNX OS 8.0 PORT MAP" }));
+
+    var padNodes = [];
+    L.placed.forEach(function (p) {
+      var g = svg("g", { class: "fpg", style: "--i:" + p.i });
+      var rd = refdes[p.f.path];
+      g.appendChild(svg("rect", { class: "fp" + (p.conn ? " build" : ""), x: p.x, y: p.y, width: p.w, height: p.h, rx: 3 }));
+      g.appendChild(svg("circle", { class: "pin1", cx: p.x + 7, cy: p.y + 7, r: 2.4 }));
+      g.appendChild(svg("text", { class: "refdes", x: p.x, y: p.y - 8, text: rd }));
+      var name = p.f.path.split("/").pop();
+      var maxc = Math.max(4, Math.floor((p.w - 36) / 6.7));
+      if (name.length > maxc) name = name.slice(0, maxc - 1) + "…";
+      g.appendChild(svg("text", { class: "fname", x: p.x + 28, y: p.y - 8, text: name }));
+      s.appendChild(g);
+      p.mine.forEach(function (f) {
+        var px = p.x + f._px;
+        var py = p.conn ? p.y + p.h / 2 + (f._lane - (p.lanes - 1) / 2) * LANE
+                        : p.y + 22 + f._lane * LANE;
+        var pos = svg("g", { transform: "translate(" + px.toFixed(1) + " " + py.toFixed(1) + ")" });
+        var a = svg("g", { class: "pad", tabindex: "0", role: "button", "data-idx": f.idx,
+          "aria-label": (f.guarded ? "skipped " : "") + f.severity + " " + f.rule + " " + f.what + " at " + f.file + " line " + f.line,
+          style: "--i:" + padNodes.length });
+        var inner = glyph(f.severity, f.guarded, PAD);
+        inner.appendChild(svg("circle", { class: "halo", r: 10 }));
+        a.appendChild(inner);
+        a.appendChild(svg("title", { text: f.rule + "  " + f.what + "  (" + f.file + ":" + f.line + ")" }));
+        pos.appendChild(a);
+        s.appendChild(pos);
+        padNodes.push({ node: a, f: f });
+      });
+    });
+    if (!L.placed.length)
+      s.appendChild(svg("text", { class: "legend", x: L.W / 2, y: L.H / 2, "text-anchor": "middle", text: "NO C, C++ OR BUILD FILES FOUND" }));
+    return { svg: s, pads: padNodes };
+  }
+
+  /* ---------- side column ---------- */
+  function drawSide() {
+    var side = el("div", { class: "side" });
+    var lines = (data.files && data.files.lines) || 0;
+    var root = (data.root || "").replace(/\/+$/, "");
+    var tb = el("div", { class: "titleblock", style: "--i:0" }, [
+      el("div", { class: "wide" }, [el("span", { class: "k caps", text: "Project" }), el("span", { class: "v", text: root.split("/").pop() || root })]),
+      el("div", {}, [el("span", { class: "k caps", text: "Target" }), el("span", { class: "v", text: data.target || "QNX OS 8.0" })]),
+      el("div", {}, [el("span", { class: "k caps", text: "Scanned with" }), el("span", { class: "v", text: "qport " + data.version })]),
+      el("div", {}, [el("span", { class: "k caps", text: "Files" }), el("span", { class: "v", text: plural(src.length, "source") + ", " + bld.length + " build" })]),
+      el("div", {}, [el("span", { class: "k caps", text: "Lines" }), el("span", { class: "v num", text: lines.toLocaleString("en-US") })])
+    ]);
+    side.appendChild(tb);
+
+    var e = counts.error, w = counts.warning, n = counts.note;
+    var v = el("section", { class: "verdict" + (e ? "" : " clean"), style: "--i:1", "aria-labelledby": "verdict-h" });
+    v.appendChild(el("span", { class: "caps", text: "Verdict for QNX OS 8.0" }));
+    if (e) {
+      v.appendChild(el("h2", { id: "verdict-h", text: "Needs porting" }));
+      v.appendChild(el("p", { text: plural(e, "blocking change") + " before this builds, " + plural(w, "warning") + " to review for behaviour on QNX." }));
+      var b = el("button", { class: "btn", type: "button", text: "Show the " + plural(e, "blocking change") });
+      b.addEventListener("click", function () { setSev("error"); document.getElementById("findings").scrollIntoView({ behavior: reduce ? "auto" : "smooth" }); });
+      v.appendChild(b);
+    } else if (w) {
+      v.appendChild(el("h2", { id: "verdict-h", text: "Likely to build" }));
+      v.appendChild(el("p", { text: "No blockers. " + plural(w, "warning") + " may change behaviour on QNX." }));
+      var b2 = el("button", { class: "btn", type: "button", text: "Review the " + plural(w, "warning") });
+      b2.addEventListener("click", function () { setSev("warning"); document.getElementById("findings").scrollIntoView({ behavior: reduce ? "auto" : "smooth" }); });
+      v.appendChild(b2);
+    } else {
+      v.appendChild(el("h2", { id: "verdict-h", text: "No blockers" }));
+      v.appendChild(el("p", { text: n ? plural(n, "note") + " worth a look; nothing stops a QNX build." : "Nothing in this tree is Linux-only by qport's rules." }));
+    }
+    side.appendChild(v);
+
+    /* drill chart: rule x quantity */
+    var byRule = {};
+    findings.forEach(function (f) {
+      if (f.guarded) return;
+      var k = f.rule;
+      if (!byRule[k]) byRule[k] = { rule: k, title: f.title, sev: f.severity, q: 0 };
+      byRule[k].q++;
+    });
+    var rows = Object.keys(byRule).map(function (k) { return byRule[k]; })
+      .sort(function (a, b) { return SEV[b.sev] - SEV[a.sev] || b.q - a.q || (a.rule < b.rule ? -1 : 1); });
+    if (rows.length) {
+      var tbody = el("tbody");
+      rows.slice(0, 9).forEach(function (r) {
+        var tr = el("tr", { tabindex: "0", title: "Show " + r.rule + " findings" }, [
+          el("td", {}, [glyphIcon(r.sev, false)]),
+          el("td", { class: "mono", text: r.rule }),
+          el("td", { text: r.title }),
+          el("td", { class: "q num", text: String(r.q) })
+        ]);
+        function go() { setSev(r.sev); var first = document.querySelector('.row[data-rule="' + r.rule + '"]'); if (first) { first.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }); openRow(first); } }
+        tr.addEventListener("click", go);
+        tr.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+        tbody.appendChild(tr);
+      });
+      var more = rows.length > 9 ? " (top 9 of " + rows.length + ")" : "";
+      side.appendChild(el("div", { class: "chart-wrap", style: "--i:2" }, [el("table", { class: "chart" }, [
+        el("caption", { class: "caps", text: "Rule chart" + more }),
+        el("thead", {}, [el("tr", {}, [el("th", { text: "Sym" }), el("th", { text: "Rule" }), el("th", { text: "Finding" }), el("th", { class: "q", text: "Qty" })])]),
+        tbody
+      ])]));
+    }
+    var libs = data.qnx_link_libs || [];
+    side.appendChild(el("p", { class: "linkline", style: "--i:3" }, [
+      el("span", { class: "caps", text: "Link on QNX  " }),
+      el("span", { class: "mono", text: libs.length ? libs.map(function (l) { return "-l" + l; }).join(" ") : "libc only" })
+    ]));
+    return side;
+  }
+
+  /* ---------- findings list ---------- */
+  var listHost, padIndex = {};
+  function openRow(row) {
+    var open = row.classList.toggle("open");
+    row.querySelector("button").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  function light(idx, on) {
+    var p = padIndex[idx];
+    if (p) p.node.classList.toggle("lit", on);
+    var r = document.getElementById("f-" + idx);
+    if (r) r.classList.toggle("lit", on);
+  }
+  function drawList() {
+    listHost.innerHTML = "";
+    var shown = findings.filter(visible);
+    if (!shown.length) {
+      var msg = findings.length
+        ? (state.guarded ? "No findings at this level." : "No findings at this level in code a QNX build compiles.")
+        : "qport found nothing Linux-only in this tree.";
+      listHost.appendChild(el("div", { class: "empty" }, [el("strong", { text: findings.length ? "Clear at this level" : "Clean scan" }), el("span", { text: msg })]));
+    }
+    files.forEach(function (fi) {
+      var mine = shown.filter(function (f) { return f.file === fi.path; });
+      if (!mine.length) return;
+      var ce = mine.filter(function (f) { return f.severity === "error" && !f.guarded; }).length;
+      var sec = el("section", { class: "file", "aria-label": fi.path }, [
+        el("div", { class: "file-h" }, [
+          el("span", { class: "rd caps", text: refdes[fi.path] || "" }),
+          el("span", { class: "path mono", text: fi.path }),
+          el("span", { class: "meta num", text: plural(fi.lines, "line") + "  ·  " + plural(mine.length, "finding") + (ce ? "  ·  " + ce + " blocking" : "") })
+        ])
+      ]);
+      mine.forEach(function (f) {
+        var btn = el("button", { type: "button", "aria-expanded": "false", "aria-controls": "d-" + f.idx }, [
+          el("span", { class: "glyph" }, [glyphIcon(f.severity, f.guarded)]),
+          el("span", { class: "loc num", text: f.line + ":" + f.col }),
+          el("span", { class: "sev " + f.severity, text: f.guarded ? "skipped" : f.severity }),
+          el("span", { class: "what", text: f.what, title: f.what }),
+          el("span", { class: "title" }, [document.createTextNode(f.title), el("small", { class: "mono", text: f.rule })])
+        ]);
+        var det = el("div", { class: "detail", id: "d-" + f.idx }, [
+          f.snippet ? el("pre", { text: f.line + "  " + f.snippet }) : null,
+          el("p", { class: "fix" }, [el("b", { text: "Fix" }), document.createTextNode(f.fix)]),
+          f.guarded ? el("p", { class: "src", text: "Inside an #if branch a QNX build does not compile; shown for completeness." }) : null,
+          el("p", { class: "src", text: "Source: " + f.ref })
+        ]);
+        var row = el("div", { class: "row", id: "f-" + f.idx, "data-rule": f.rule }, [btn, det]);
+        btn.addEventListener("click", function () { openRow(row); });
+        row.addEventListener("mouseenter", function () { light(f.idx, true); });
+        row.addEventListener("mouseleave", function () { light(f.idx, false); });
+        sec.appendChild(row);
+      });
+      listHost.appendChild(sec);
+    });
+    Object.keys(padIndex).forEach(function (k) {
+      padIndex[k].node.classList.toggle("dim", !visible(padIndex[k].f));
+      padIndex[k].node.style.display = (padIndex[k].f.guarded && !state.guarded) ? "none" : "";
+    });
+    segButtons.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.sev === state.sev ? "true" : "false"); });
+  }
+
+  var segButtons = [];
+  function setSev(s) { state.sev = s; drawList(); }
+
+  /* ---------- assemble ---------- */
+  var app = document.getElementById("app");
+  document.title = "qport port map: " + ((data.root || "").replace(/\/+$/, "").split("/").pop() || "scan");
+  var drawing = el("div", { class: "drawing" });
+  var board = drawBoard();
+  board.pads.forEach(function (p) { padIndex[p.f.idx] = p; });
+  var bw = el("div", { class: "board-wrap" }, [board.svg]);
+  drawing.appendChild(bw);
+  drawing.appendChild(drawSide());
+  app.appendChild(drawing);
+
+  board.pads.forEach(function (p) {
+    function go() {
+      if (p.f.guarded && !state.guarded) return;
+      if (!visible(p.f)) setSev("all");
+      var row = document.getElementById("f-" + p.f.idx);
+      if (!row) return;
+      row.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+      if (!row.classList.contains("open")) openRow(row);
+      row.querySelector("button").focus({ preventScroll: true });
+    }
+    p.node.addEventListener("click", go);
+    p.node.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    p.node.addEventListener("mouseenter", function () { light(p.f.idx, true); });
+    p.node.addEventListener("mouseleave", function () { light(p.f.idx, false); });
+  });
+
+  var seg = el("div", { class: "seg", role: "group", "aria-label": "Severity" });
+  [["all", "All " + (counts.error + counts.warning + counts.note)], ["error", "Errors " + counts.error],
+   ["warning", "Warnings " + counts.warning], ["note", "Notes " + counts.note]].forEach(function (o) {
+    var b = el("button", { type: "button", "data-sev": o[0], "aria-pressed": "false", text: o[1] });
+    b.addEventListener("click", function () { setSev(o[0]); });
+    segButtons.push(b); seg.appendChild(b);
+  });
+  var tg = el("input", { type: "checkbox" });
+  tg.addEventListener("change", function () { state.guarded = tg.checked; drawList(); });
+  var bar = el("div", { class: "bar" }, [el("h2", { text: "Findings" }), seg,
+    counts.guarded ? el("label", { class: "toggle" }, [tg, el("span", { text: "Include " + plural(counts.guarded, "finding") + " in branches QNX skips" })]) : null]);
+  listHost = el("div");
+  app.appendChild(el("section", { class: "findings", id: "findings", "aria-label": "Findings" }, [bar, listHost]));
+  app.appendChild(el("footer", {}, [
+    el("span", { text: "qport " + data.version + "  ·  rules grounded in the QNX OS 8.0 documentation" }),
+    el("span", { text: "Pads: square = error, filled round = warning, hollow = note, dashed = in a branch QNX skips" })
+  ]));
+  drawList();
+
+  if (!reduce) {
+    board.svg.classList.add("plot");
+    app.classList.add("plot-in");
+    var sideKids = app.querySelectorAll(".side > *");
+    for (var i = 0; i < sideKids.length; i++) sideKids[i].style.setProperty("--i", i);
+  }
+})();
+</script>
+</body>
+</html>

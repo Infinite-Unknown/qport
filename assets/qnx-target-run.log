@@ -1,0 +1,237 @@
+# 2026-11-26T06:42:38Z host: Linux 6.8.0-1070-azure x86_64 (GitHub Codespace)
+# Target: QNX OS 8.0 x86_64 image made with mkqnximage, running in QEMU with KVM, reached over ssh (QEMU user networking, host port 10022 -> guest 22).
+# Binaries: build-qnx-x86_64/qport and build-qnx-x86_64/unit from qnx-build-x86_64.log, copied with tar over ssh to /data/home/root/qport with examples/ and src/.
+# Each command below ran on the target in /data/home/root/qport (sh target-run.sh). exit=1 from 'qport scan' means errors were found (default --fail-on error).
+
+$ uname -a
+QNX qnx8 8.0.0 2026/10/30-09:10:05EDT x86pc x86_64
+exit=0
+
+$ ls -l qport unit
+-rwxrwxrwx  1 qnxuser qnxuser 286440 2026-11-26 06:41 qport
+-rwxrwxrwx  1 qnxuser qnxuser 277592 2026-11-26 06:41 unit
+exit=0
+
+$ ./qport --version
+qport 0.1.0 (rules for QNX OS 8.0, 49 rules)
+exit=0
+
+$ ./unit
+unit: all checks passed
+exit=0
+
+$ ./qport scan examples/linux-telemetryd
+qport 0.1.0  QNX OS 8.0 portability scan of examples/linux-telemetryd
+5 source files, 2 build files, 297 lines
+
+CMakeLists.txt
+  12:4    note    QNX072  CMAKE_SYSTEM_NAME Linux: Linux-only branch in CMake; a QNX build takes the
+                          other path
+                          | if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+                          fix: Add an if(QNX) / CMAKE_SYSTEM_NAME STREQUAL "QNX" branch (QNX
+                               toolchain files set QNX TRUE).
+  17:53   note    QNX071  -ldl: Linux link library that QNX keeps in libc
+                          | target_link_libraries(telemetryd PRIVATE pthread rt -ldl)
+                          fix: dlopen(), clock_gettime(), timer_create() and mq_open() are in libc
+                               on QNX 8.0; drop the extra library if the link fails.
+Makefile
+  2:20    warning QNX073  uname: Platform picked with uname, which reports the build host
+                          | UNAME_S := $(shell uname -s)
+                          fix: When cross compiling with qcc, uname describes the Linux or Windows
+                               host, not the QNX target. Decide on the target instead: CMake
+                               CMAKE_SYSTEM_NAME / if(QNX), or a TARGET_OS make variable.
+src/config.c
+  2:1     warning QNX081  -lregex: Uses POSIX regex, but the build never links libregex
+                          | #include <regex.h>
+                          fix: On QNX, regcomp()/regexec() live in libregex: add -lregex.
+  5:1     note    QNX009  sys/inotify.h: inotify exists on QNX but lives in libfsnotify and needs
+                          fsevmgr
+                          | #include <sys/inotify.h>
+                          fix: Link with -lfsnotify and make sure the fsevmgr service runs on the
+                               target. QNX adds inotify_qnx_ext() for QNX-specific options.
+  5:1     warning QNX082  -lfsnotify: Uses inotify, but the build never links libfsnotify
+                          | #include <sys/inotify.h>
+                          fix: Add -lfsnotify.
+  14:14   note    QNX037  inotify_init1: inotify needs libfsnotify and fsevmgr on QNX
+                          | int fd = inotify_init1(IN_NONBLOCK);
+                          fix: Link with -lfsnotify and run fsevmgr on the target.
+  15:5    note    QNX037  inotify_add_watch: inotify needs libfsnotify and fsevmgr on QNX
+                          | inotify_add_watch(fd, path, IN_CLOSE_WRITE);
+                          fix: Link with -lfsnotify and run fsevmgr on the target.
+src/main.c
+  2:1     note    QNX051  _GNU_SOURCE: _GNU_SOURCE is a glibc feature macro
+                          | #define _GNU_SOURCE
+                          fix: On QNX, define _QNX_SOURCE (or _POSIX_C_SOURCE / _XOPEN_SOURCE) to
+                               expose the full API set.
+  4:1     warning QNX006  execinfo.h: glibc backtrace() API
+                          | #include <execinfo.h>
+                          fix: backtrace() is not in the QNX 8.0 C Library Reference. Wrap the crash
+                               handler in #ifdef __GLIBC__ or use QNX's own backtrace library.
+  12:1    error   QNX002  sys/epoll.h: epoll is Linux-only
+                          | #include <sys/epoll.h>
+                          fix: Use poll() or select(); for event-driven servers on QNX, use
+                               ionotify() to get a pulse on a channel and MsgReceivePulse() /
+                               MsgReceive().
+  13:1    error   QNX003  sys/eventfd.h: eventfd/signalfd/timerfd headers do not exist on QNX
+                          | #include <sys/eventfd.h>
+                          fix: QNX has no direct equivalent: write a small shim (the QNX Porting
+                               Guide shows an eventfd shim), or use native mechanisms:
+                               timer_create() with SIGEV_PULSE for timers, pulses on a channel for
+                               wakeups, sigwaitinfo() for signals.
+  14:1    error   QNX004  sys/prctl.h: Linux-specific system header
+                          | #include <sys/prctl.h>
+                          fix: Remove it. prctl(PR_SET_NAME) maps to pthread_setname_np(); process
+                               abilities on QNX are managed with procmgr_ability(); the CPU count is
+                               _syspage_ptr->num_cpu (<sys/syspage.h>).
+  15:1    error   QNX003  sys/timerfd.h: eventfd/signalfd/timerfd headers do not exist on QNX
+                          | #include <sys/timerfd.h>
+                          fix: QNX has no direct equivalent: write a small shim (the QNX Porting
+                               Guide shows an eventfd shim), or use native mechanisms:
+                               timer_create() with SIGEV_PULSE for timers, pulses on a channel for
+                               wakeups, sigwaitinfo() for signals.
+  29:13   warning QNX032  backtrace: glibc backtrace() API
+                          | int n = backtrace(frames, 32);
+                          fix: Guard with #ifdef __GLIBC__; QNX ships its own backtrace library.
+  30:5    warning QNX032  backtrace_symbols_fd: glibc backtrace() API
+                          | backtrace_symbols_fd(frames, n, 2);
+                          fix: Guard with #ifdef __GLIBC__; QNX ships its own backtrace library.
+  37:5    error   QNX021  eventfd_write: eventfd() does not exist on QNX
+                          | eventfd_write(stop_fd, 1);
+                          fix: Write a shim (the QNX Porting Guide links an eventfd shim), use a
+                               pipe() as a wakeup channel, or send a pulse with MsgSendPulse().
+  45:9    error   QNX024  sched_setaffinity: Linux CPU affinity API
+                          | if (sched_setaffinity(0, sizeof set, &set) != 0)
+                          fix: Use ThreadCtl(_NTO_TCTL_RUNMASK_GET_AND_SET_INHERIT, ...) to set the
+                               thread's runmask (and its children's).
+  51:14   error   QNX022  timerfd_create: timerfd does not exist on QNX
+                          | int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+                          fix: Use timer_create() with a SIGEV_PULSE sigevent and receive the pulse
+                               with MsgReceivePulse(): deterministic periodic timers are what QNX is
+                               built for. Use CLOCK_MONOTONIC.
+  56:5    error   QNX022  timerfd_settime: timerfd does not exist on QNX
+                          | timerfd_settime(fd, 0, &its, NULL);
+                          fix: Use timer_create() with a SIGEV_PULSE sigevent and receive the pulse
+                               with MsgReceivePulse(): deterministic periodic timers are what QNX is
+                               built for. Use CLOCK_MONOTONIC.
+  67:5    error   QNX025  prctl: prctl() is Linux-only
+                          | prctl(PR_SET_NAME, "telemetryd", 0, 0, 0);
+                          fix: PR_SET_NAME -> pthread_setname_np(0, name); capability/privilege
+                               options -> procmgr_ability().
+  70:15   error   QNX021  eventfd: eventfd() does not exist on QNX
+                          | stop_fd = eventfd(0, EFD_NONBLOCK);
+                          fix: Write a shim (the QNX Porting Guide links an eventfd shim), use a
+                               pipe() as a wakeup channel, or send a pulse with MsgSendPulse().
+  82:14   error   QNX020  epoll_create1: epoll is Linux-only
+                          | int ep = epoll_create1(0);
+                          fix: Use poll()/select(), or ionotify() with a pulse delivered to a
+                               channel and a MsgReceive() loop, which is the native QNX event model.
+  84:25   error   QNX020  epoll_ctl: epoll is Linux-only
+                          | ev.data.fd = tick;  epoll_ctl(ep, EPOLL_CTL_ADD, tick, &ev);
+                          fix: Use poll()/select(), or ionotify() with a pulse delivered to a
+                               channel and a MsgReceive() loop, which is the native QNX event model.
+  85:27   error   QNX020  epoll_ctl: epoll is Linux-only
+                          | ev.data.fd = stop_fd; epoll_ctl(ep, EPOLL_CTL_ADD, stop_fd, &ev);
+                          fix: Use poll()/select(), or ionotify() with a pulse delivered to a
+                               channel and a MsgReceive() loop, which is the native QNX event model.
+  86:25   error   QNX020  epoll_ctl: epoll is Linux-only
+                          | ev.data.fd = watch; epoll_ctl(ep, EPOLL_CTL_ADD, watch, &ev);
+                          fix: Use poll()/select(), or ionotify() with a pulse delivered to a
+                               channel and a MsgReceive() loop, which is the native QNX event model.
+  89:19   warning QNX083  batch (400 KiB): Large array on the stack
+                          | struct sample batch[100 * MAX_SIGNALS * 4];
+                          fix: qcc produces binaries with a much smaller default stack than Linux's
+                               8 MB. Move the buffer to the heap or a static, or link with
+                               -Wl,-z,stack-size,<bytes> (and set pthread_attr_setstacksize() for
+                               threads).
+  94:17   error   QNX020  epoll_wait: epoll is Linux-only
+                          | int n = epoll_wait(ep, events, 8, -1);
+                          fix: Use poll()/select(), or ionotify() with a pulse delivered to a
+                               channel and a MsgReceive() loop, which is the native QNX event model.
+src/publish.c
+  2:1     warning QNX080  -lsocket: Uses sockets, but the build never links libsocket
+                          | #include <netdb.h>
+                          fix: On QNX, socket functions need -lsocket (CMake:
+                               target_link_libraries(<t> socket) inside if(QNX)).
+  18:31   warning QNX050  SO_BINDTODEVICE: Linux-only socket option
+                          | setsockopt(s, SOL_SOCKET, SO_BINDTODEVICE, "can0-gw", 8);
+                          fix: io-sock's socket API is ported from FreeBSD, so use the FreeBSD
+                               equivalent where one exists (TCP_NOPUSH for TCP_CORK, bind to the
+                               interface address instead of SO_BINDTODEVICE, one send() instead of
+                               MSG_MORE) or drop the option.
+  26:54   warning QNX050  MSG_MORE: Linux-only socket option
+                          | return (int)send(sock, s, (size_t)n * sizeof *s, MSG_MORE);
+                          fix: io-sock's socket API is ported from FreeBSD, so use the FreeBSD
+                               equivalent where one exists (TCP_NOPUSH for TCP_CORK, bind to the
+                               interface address instead of SO_BINDTODEVICE, one send() instead of
+                               MSG_MORE) or drop the option.
+src/sensors.c
+  7:1     warning QNX008  sys/shm.h: System V IPC
+                          | #include <sys/shm.h>
+                          fix: shmget()/msgget()/semget() are not in the QNX 8.0 C Library
+                               Reference. Use POSIX shm_open()+mmap(), mq_open(), sem_open(), or QNX
+                               native message passing (MsgSend/MsgReceive/MsgReply).
+  8:1     error   QNX004  sys/sysinfo.h: Linux-specific system header
+                          | #include <sys/sysinfo.h>
+                          fix: Remove it. prctl(PR_SET_NAME) maps to pthread_setname_np(); process
+                               abilities on QNX are managed with procmgr_ability(); the CPU count is
+                               _syspage_ptr->num_cpu (<sys/syspage.h>).
+  20:19   warning QNX054  CLOCK_BOOTTIME: Linux-only clock id
+                          | clock_gettime(CLOCK_BOOTTIME, &ts);
+                          fix: QNX 8.0 clock_gettime() documents CLOCK_REALTIME, CLOCK_MONOTONIC and
+                               the CPU-time clocks. Use CLOCK_MONOTONIC for intervals.
+  27:33   error   QNX060  /sys/class/thermal/thermal_zone%d/temp: sysfs path; QNX has no /sys
+                          | snprintf(path, sizeof path, "/sys/class/thermal/thermal_zone%d/temp", zone);
+                          fix: Read hardware state from the driver's resource manager (devctl() or
+                               read() on its /dev path) or from the system page.
+  38:15   warning QNX035  shmget: System V IPC call
+                          | ring_id = shmget(0x7e1e, MAX_SIGNALS * sizeof(float), 0444);
+                          fix: Not in the QNX 8.0 C Library Reference. Use shm_open()+mmap(),
+                               mq_open(), sem_open(), or QNX message passing.
+  40:16   warning QNX035  shmat: System V IPC call
+                          | ring = shmat(ring_id, NULL, SHM_RDONLY);
+                          fix: Not in the QNX 8.0 C Library Reference. Use shm_open()+mmap(),
+                               mq_open(), sem_open(), or QNX message passing.
+  41:16   warning QNX029  get_nprocs: glibc/Linux system information call
+                          | int ncpu = get_nprocs();
+                          fix: Use sysconf() for POSIX limits and the QNX system page
+                               (_syspage_ptr->num_cpu, <sys/syspage.h>) for the CPU count.
+  59:21   warning QNX061  /proc/meminfo: Linux /proc file
+                          | FILE *f = fopen("/proc/meminfo", "r");
+                          fix: QNX's /proc is a process filesystem with a different layout and no
+                               Linux text files. Use sysconf() for limits and the system page
+                               (_syspage_ptr) for CPU and memory layout.
+
+Summary: 17 errors, 16 warnings, 6 notes  (1 more inside #if branches QNX does not compile; --show-guarded)
+Top rules: QNX020 x5, QNX003 x2, QNX004 x2, QNX021 x2, QNX022 x2, QNX032 x2
+Link on QNX: -lsocket -lregex -lfsnotify
+Verdict: needs porting: 17 blocking changes before this builds for QNX 8.0.
+exit=1
+
+$ ./qport scan -f html -o report.html examples/linux-telemetryd
+exit=1
+
+$ ls -l report.html
+-rw-r--r--  1 root root 49307 2026-11-26 06:42 report.html
+exit=0
+
+$ ls src
+emit.c
+html_template.c
+lexer.c
+main.c
+qport.h
+report.c
+rules.c
+scan.c
+util.c
+exit=0
+
+$ ./qport scan src
+qport 0.1.0  QNX OS 8.0 portability scan of src
+9 source files, 0 build files, 4906 lines
+
+Summary: 0 errors, 0 warnings, 0 notes
+Link on QNX: (libc only)
+Verdict: no blockers found for QNX 8.0.
+exit=0
+

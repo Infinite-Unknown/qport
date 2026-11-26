@@ -13,7 +13,7 @@ Porting a Linux component to QNX usually starts with a compile that fails on `sy
 - **Checks headers against the real SDP.** With `$QNX_TARGET` set, every `#include <...>` is looked up in the QNX 8.0 target sysroot; anything missing is a library you still have to port.
 - **Writes the QNX build config.** `qport toolchain` emits a QNX 8.0 CMake toolchain file and make settings for `aarch64le` or `x86_64`, with the libraries the scan found already on the link line.
 - **Fits into CI and review.** Text, one-line `--brief`, JSON, SARIF 2.1.0 (GitHub code scanning), Markdown, and a single-file HTML port map. Exit status 1 on errors (`--fail-on`).
-- **Portable C11, no dependencies.** Plain C11 + POSIX with a host build (`make`, CMake) and a QNX OS 8.0 build (`make qnx` with `qcc`), so it can also be built for the target or the QNX self-hosted Developer Desktop.
+- **Portable C11, no dependencies.** Plain C11 + POSIX with a host build (`make`, CMake) and a QNX OS 8.0 build (`make qnx` with `qcc`). It builds for QNX 8.0 `x86_64` and `aarch64le` and runs on a QNX 8.0 target.
 
 ## Quick start
 
@@ -73,25 +73,61 @@ Silence a line with `// qport:ignore` or `// qport:ignore QNX020 QNX021`; skip a
 
 In CI, `qport scan -f sarif -o qport.sarif .` produces a SARIF 2.1.0 file that GitHub code scanning can show inline on pull requests.
 
-## Building qport for QNX OS 8.0
+## Building and running qport on QNX OS 8.0
 
-qport is plain C11 plus POSIX, written to build for a QNX target as well as the host. The QNX build uses the QNX SDP 8.0 toolchain:
+qport is plain C11 plus POSIX. It is built with the QNX SDP 8.0 toolchain and runs on a QNX OS 8.0 target.
 
 | | |
 |---|---|
 | QNX version | QNX OS 8.0 (QNX Software Development Platform 8.0, QNX Everywhere licence) |
-| Targets | `x86_64` (QNX 8.0 Quick Start Target Image on QEMU) and `aarch64le` (e.g. Raspberry Pi 4/5) |
-| Toolchain | `qcc` from SDP 8.0, `-Vgcc_ntox86_64` / `-Vgcc_ntoaarch64le` |
+| Toolchain | `qcc` 12.2.0 from SDP 8.0: `-Vgcc_ntox86_64` and `-Vgcc_ntoaarch64le` |
+| Target that ran it | QNX OS 8.0 `x86_64` image made with `mkqnximage --type=qemu`, booted in QEMU 8.2 with KVM |
+| Also built for | `aarch64le` (built with no warnings; not run on hardware) |
 
 ```sh
 source ~/qnx800/qnxsdp-env.sh          # sets QNX_HOST and QNX_TARGET
 make qnx QNX_ARCH=x86_64               # -> build-qnx-x86_64/qport and unit
+make qnx QNX_ARCH=aarch64le            # -> build-qnx-aarch64le/qport and unit
 make qnx-test                          # host qport, checking headers against $QNX_TARGET
-# or with CMake, using toolchain files qport generated for itself:
-cmake -B build-qnx -DCMAKE_TOOLCHAIN_FILE=cmake/qnx-x86_64.cmake && cmake --build build-qnx
 ```
 
-Copy `build-qnx-x86_64/qport` (and `examples/`) to the target, then run `./qport scan examples/linux-telemetryd` there. Step-by-step notes, including the QEMU image, are in [`docs/QNX.md`](docs/QNX.md).
+Then copy `build-qnx-x86_64/qport`, `unit` and `examples/` to the target and run `./unit` and `./qport scan examples/linux-telemetryd` there. The full walkthrough, including the QEMU image and the ssh port forward, is in [`docs/QNX.md`](docs/QNX.md).
+
+## Evidence of QNX use
+
+Everything below was run on 2026-11-26 on a Linux x86_64 host (Ubuntu 24.04) with QNX SDP 8.0 installed. The logs are the unedited output; each command is printed before its output.
+
+**Built with the QNX 8.0 toolchain.** `make qnx` (see `Makefile`) runs `qcc -Vgcc_nto<arch> -D_QNX_SOURCE` on all of `src/` and on `tests/unit.c`. Both targets build with no warnings and produce QNX ELF binaries (`interpreter /usr/lib/ldqnx-64.so.2`):
+[`assets/qnx-build-x86_64.log`](assets/qnx-build-x86_64.log), [`assets/qnx-build-aarch64le.log`](assets/qnx-build-aarch64le.log).
+
+**Runs on QNX OS 8.0.** The x86_64 build was copied to a QNX OS 8.0 virtual machine and run there ([`assets/qnx-target-run.log`](assets/qnx-target-run.log)):
+
+```text
+$ uname -a
+QNX qnx8 8.0.0 2026/10/30-09:10:05EDT x86pc x86_64
+$ ./unit
+unit: all checks passed
+$ ./qport scan examples/linux-telemetryd
+...
+Summary: 17 errors, 16 warnings, 6 notes  (1 more inside #if branches QNX does not compile; --show-guarded)
+Verdict: needs porting: 17 blocking changes before this builds for QNX 8.0.
+$ ./qport scan src
+qport 0.1.0  QNX OS 8.0 portability scan of src
+9 source files, 0 build files, 4906 lines
+
+Summary: 0 errors, 0 warnings, 0 notes
+Verdict: no blockers found for QNX 8.0.
+```
+
+The HTML port map written on the QNX target ([`assets/report-from-qnx.html`](assets/report-from-qnx.html)) is byte-for-byte the same file the macOS build writes.
+
+**Checked against the real QNX 8.0 sysroot.** With `$QNX_TARGET` set, `header_in_sysroot()` in `src/scan.c` looks up every `#include <...>` in `$QNX_TARGET/usr/include` (and `usr/include/c++/<ver>`); anything missing there and not in the project is rule `QNX090`. `make qnx-test` runs this on qport's own source (clean) and the example: [`assets/qnx-header-check.log`](assets/qnx-header-check.log). As a cross-check of the rule set, the 8 headers the example uses that are missing from the SDP 8.0 sysroot (`sys/epoll.h`, `sys/eventfd.h`, `sys/timerfd.h`, `sys/prctl.h`, `sys/sysinfo.h`, `sys/shm.h`, `execinfo.h`, `linux/watchdog.h`) are each reported by a qport rule, and `sys/inotify.h`, which is present, is reported only as a note about `libfsnotify`: [`assets/qnx-sysroot-crosscheck.log`](assets/qnx-sysroot-crosscheck.log).
+
+**QNX knowledge in the code.**
+
+- `src/rules.c`: the 49 rules, each with the QNX 8.0 replacement (for example `timer_create()` with `SIGEV_PULSE` and `MsgReceivePulse()` for timerfd, `ThreadCtl(_NTO_TCTL_RUNMASK_GET_AND_SET_INHERIT, ...)` for CPU affinity, `procmgr_ability()` for prctl capabilities, `-lsocket` / `-lregex` / `-lfsnotify` for the QNX link line) and the QNX documentation page it comes from.
+- `src/scan.c`: `eval_on_qnx()` evaluates `#if` / `#ifdef` conditions the way a QNX 8.0 build sees them (`__QNX__`, `__QNXNTO__` defined; `__linux__`, `__GLIBC__` not), `check_local_array()` sizes stack arrays against qcc's small default stack, `link_checks()` compares socket, regex and inotify use with the libraries the build links.
+- `src/emit.c`: `emit_toolchain()` writes a QNX 8.0 CMake toolchain file and make fragment (`qcc -Vgcc_nto<arch>`, `CMAKE_SYSTEM_NAME QNX`, `CMAKE_SYSROOT $QNX_TARGET`) with the libraries the scan found.
 
 ## How it works
 
@@ -104,11 +140,11 @@ Copy `build-qnx-x86_64/qport` (and `examples/`) to the target, then run `./qport
 
 ## Verified
 
-- Builds with Apple clang (C11, `-Wall -Wextra -Wpedantic`, no warnings) via `make` and via CMake; compiles cleanly with only `_POSIX_C_SOURCE=200809L` defined.
+- QNX OS 8.0: built with `qcc` for `x86_64` and `aarch64le` with no warnings; on a QNX OS 8.0 x86_64 QEMU target, `./unit` passes, the example scan and HTML report run, and qport's own source scans clean (see [Evidence of QNX use](#evidence-of-qnx-use)).
+- Host: builds with Apple clang and with gcc 13 (C11, `-Wall -Wextra -Wpedantic`, no warnings) via `make`; compiles cleanly with only `_POSIX_C_SOURCE=200809L` defined. Log: [`assets/host-build-gcc.log`](assets/host-build-gcc.log).
 - `make test`: tokenizer unit tests and 45 fixture tests (branch analysis, false positives, stack sizing, sysroot header oracle with a stand-in sysroot, suppressions, link checks, JSON/SARIF/Markdown/HTML output, toolchain generation, self-scan).
-- qport's own source scans clean.
 
-**Not yet verified:** building with `qcc` and running on a QNX OS 8.0 target, and the header oracle against a real SDP 8.0 sysroot. The build configuration for both is in this repository.
+**Not verified:** running the `aarch64le` build on ARM hardware, and the CMake build with the generated `cmake/qnx-*.cmake` toolchain files (the QNX build above used `make qnx`).
 
 ## Limits
 

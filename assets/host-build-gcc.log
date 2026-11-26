@@ -1,0 +1,20 @@
+# 2026-11-26T06:41:58Z on Linux 6.8.0-1070-azure x86_64, host gcc build
+
+$ gcc --version | head -1
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+exit=0
+
+$ rm -f qport tests/unit
+exit=0
+
+$ make CC=gcc
+gcc -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE -O2 -g -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter -o qport src/main.c src/scan.c src/lexer.c src/rules.c src/report.c src/emit.c src/util.c src/html_template.c
+exit=0
+
+$ make CC=gcc test 2>&1 | tail -4
+  ok    qport src exits 0
+  ok    no findings in src/
+
+fixtures: 45 passed, 0 failed
+exit=0
+
